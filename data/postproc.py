@@ -5,6 +5,7 @@ from tifffile import imwrite
 from pathlib import Path
 from imreg_dft import imreg
 import scipy.ndimage as ndi
+from skimage.measure import block_reduce
 import argparse 
 import cv2
 
@@ -50,9 +51,16 @@ if __name__ == "__main__":
     parser.add_argument('-i','--input', type=str, nargs='+')
     parser.add_argument('-s','--subsample', type=int, default=2)
     parser.add_argument('-o','--output', type=str, default='output.tif')
+    parser.add_argument('-d','--downsample', type=int, default=2)
     parser.add_argument('-r','--register', action='store_true')
     args = parser.parse_args()
 
+
+    def _downsample(x):
+        if args.downsample>1:
+            # x = ndi.zoom(x, (1/args.downsample,)*2, order=1)
+            x = block_reduce(x,args.subsample, np.max)
+        return x
 
     fs = sorted(args.input)
 
@@ -60,7 +68,7 @@ if __name__ == "__main__":
 
     cutoff = 10
 
-    xs = [x[0]]
+    xs = [_downsample(x[0])]
 
     target = x[0, ::args.subsample, ::args.subsample]<cutoff
     target = (255*target).astype(np.uint8)
@@ -72,10 +80,16 @@ if __name__ == "__main__":
             moving = (255*moving).astype(np.uint8)
             y = register_simple(target, moving, y, args.subsample)
 
-        xs.append(y)        
+
+        xs.append(_downsample(y))
 
     xs = np.stack(xs)
+
+    xs_subtract = np.clip(xs.astype(np.float32) - np.mean(xs, axis=0), 0,255).astype(np.uint8)
     
     if len(args.output)>0:
         print(f'writing to {args.output}')
-        imwrite(args.output, xs)
+        p = Path(args.output)
+        p_sub = p.parent/f'{p.name}_subtracted.tif'
+        imwrite(p, xs)
+        imwrite(p_sub, xs_subtract)
