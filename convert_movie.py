@@ -1,8 +1,16 @@
+""" 
+reads and registers all frames of a firefly movie and saves them as zarr 
+
+python convert_movie.py -i movie.mov -o output.zarr
+
+
+"""
+
 import numpy as np
 from tqdm.auto import tqdm
 import imageio
 import itertools
-import torch 
+import torch
 from pathlib import Path
 import zarr
 from imreg_dft import imreg
@@ -21,14 +29,14 @@ def register_simple(target, moving, subsample=1):
 
 
 def to_gray_and_downsample(x, factor):
-    assert x.ndim==3 and x.shape[-1]==3
+    assert x.ndim == 3 and x.shape[-1] == 3
     x = np.mean(x, axis=-1)
     if factor > 1:
         # x = block_reduce(x, factor, np.max)
         x = torch.tensor(x).unsqueeze(0).unsqueeze(0)
-        x = torch.nn.functional.max_pool2d(x,factor, stride=factor) 
-        x = x.numpy()[0,0]
-    x = x/255
+        x = torch.nn.functional.max_pool2d(x, factor, stride=factor)
+        x = x.numpy()[0, 0]
+    x = x / 255
     return x
 
 
@@ -55,11 +63,11 @@ if __name__ == "__main__":
         ]
     )
 
-    cutoff = 0.04 
+    cutoff = 0.04
 
     xs = [x[0]]
 
-    for moving in tqdm(x[1:], desc='registering'):
+    for moving in tqdm(x[1:], desc="registering"):
         y = register_simple(x[0], moving, args.register_sub)
         xs.append(y)
 
@@ -67,11 +75,12 @@ if __name__ == "__main__":
 
     xs_subtract = xs.astype(np.float32) - np.mean(xs, axis=0)
 
-    if len(args.output)>0:
-        
+    if len(args.output) > 0:
+
         p = Path(args.output)
-        p_sub = p.parent/f'{p.with_suffix("").name}_subtracted.zarr'
-        print(f'writing {p}')
+        p.parent.mkdir(exist_ok=True, parents=True)
+        p_sub = p.parent / f'{p.with_suffix("").name}_subtracted.zarr'
+        print(f"writing {p}")
         zarr.save(p, xs)
-        print(f'writing {p_sub}')
+        print(f"writing {p_sub}")
         zarr.save(p_sub, xs_subtract)
